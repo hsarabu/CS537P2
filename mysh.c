@@ -23,9 +23,14 @@ int main() {
         //pseudobooleans for redirection
         int inRedir = FALSE;
         int outRedir = FALSE;
+        int needPipe = FALSE;
+        int pipeAccess[2];
+        int fileDesc;
         char fileName[128];
         commandHistory++;
         char *redirCommands[MAX_LINE];
+        int stdInput = dup(STDIN_FILENO);
+        int stdOut = dup(STDOUT_FILENO);
 
 
         printf("mysh (%i)> ", commandHistory);
@@ -88,19 +93,12 @@ int main() {
                 }
             }
         }
-        /*
-        else if(execute(toks, __numArgs) == 1){
-            continue;
-        }
-        */
-        else {
             /*
-            int pipeAccess[2];
-            if (pipe(pipeAccess) == -1) {
-                printError();
+            else if(execute(toks, __numArgs) == 1){
                 continue;
             }
-             */
+            */
+        else {
 
             //look for < and > redirections
             int index = 0;
@@ -115,9 +113,10 @@ int main() {
                 }
                 index++;
             }
-
+            //TODO: Add error handling when there are too many args
             if(inRedir == TRUE || outRedir == TRUE){
                 //have to send different things to the execvp command in the child
+
 
                 //if we are sending out, we have to find the 2 things before the >
                 if(outRedir == TRUE){
@@ -126,24 +125,43 @@ int main() {
                     }
                     //file name will be at index++
                     strcpy(fileName, toks[index + 1]);
+                    fileDesc = open(fileName, O_WRONLY | O_CREAT | O_TRUNC);
+                    if(fileDesc < 0){
+                        printError();
+                        continue;
+                    }
+                    close(1); //close stdout and reassing w/ dup2
+                    dup2(fileDesc, 1);
                 }
                 else{
                     for(int i = index + 1; i < __numArgs; i++){
                         redirCommands[i - index - 1] = toks[i];
                     }
                     strcpy(fileName, toks[index - 1]);
+                    fileDesc = open(fileName, O_RDONLY);
+                    close(0); //close the input
+                    dup2(fileDesc, 0);
                 }
             }
+            /*
 
+            needPipe = TRUE;
+            if (pipe(pipeAccess) == -1) {
+                printError();
+                continue;
+            }
+             */
+
+            //if there is a pipe, nothing is displayed in the console
             int pid = fork();
             if (pid == 0) {
-                //close(pipeAccess[0]); //closing read
+                if(needPipe == TRUE){
+                    close(pipeAccess[0]);
+                    dup2(pipeAccess[1], 1); //stdout -> pipe
+                    dup2(pipeAccess[1], 2); //stderr -> pipe
 
-                //dup2(pipeAccess[1], 1); //stdout -> pipe
-                //dup2(pipeAccess[1], 2); //stderr -> pipe
-
-                //dup2(pipeAccess[1], STDIN_FILENO);
-                //close(pipeAccess[1]);
+                    close(pipeAccess[1]);
+                }
 
                 if(inRedir == TRUE || outRedir == TRUE) execvp(redirCommands[0], redirCommands);
                 execvp(toks[0], toks);
@@ -153,34 +171,28 @@ int main() {
                 continue;
             } else {
                 //parent
-                wait(pid);
-                /*
-                char outBuff[1000];
-                close(pipeAccess[1]); //close write end in parent
-                while (read(pipeAccess[0], outBuff, sizeof(outBuff)) != 0) {
-                    write(STDIN_FILENO, outBuff, sizeof(outBuff));
+                if(needPipe == FALSE){
+                    wait(pid);
                 }
-                */
-
+                else if (needPipe == TRUE) {
+                    char outBuff[1000];
+                    close(pipeAccess[1]); //close write end in parent
+                    while (read(pipeAccess[0], outBuff, sizeof(outBuff)) != 0) {
+                        write(STDIN_FILENO, outBuff, sizeof(outBuff));
+                    }
+                }
             }
+
         }
-
-
-        /*
-         * Basic structure is as follows:
-         * 1) Read in what the user wants up to a 513 char line
-         * 2) Do error handling on the input
-         * 3) do pid = fork() to create another process
-         * 4) if pid > 0, you are in the child. Use pipe() and dup2() to pipe the stdout and error handling of the child to the parent
-         * 5) Error handle the fork
-         * 6) Process the command if we are using the parent process
-         */
-
-
         //TODO: Remove the break so it actually works
         //TODO: Solve issue where if you do commands really fast, "An error has occured" appears next to mysh
+        close(0);
+        close(1);
+        dup2(stdInput, 0);
+        dup2(stdOut, 1);
         fflush(stdout);
     }
+
 
     //upon exit we need to kill background tasks
     return 0;
@@ -198,40 +210,6 @@ int getLine(char *input, char **toks, char *tok){
     return index;
 }
 
-int execute(char **toks, int __numargs){
-    //look for redirection
-    //if(strcmp(toks[1],">") == 0) outRedir = TRUE;
-    //else if (strcmp(toks[1], "<") == 0) inRedir == TRUE;
-    int pipeThing[2];
-    if(pipe(pipeThing) == -1){
-        printError();
-        return 1;
-    }
-    int pid = fork();
-    if(pid == 0){
-        //in the child process
-        close(pipeThing[0]);
-        dup2(pipeThing[1], STDIN_FILENO);
-
-        if(execvp(toks[0], toks) < 0){
-            //TODO: Error handling
-            printf(toks[0],stderr);
-        }
-
-    }
-    else if (pid < 0){
-        //ERROR WITH PID
-        printError();
-        return 1;
-    }
-    else{
-        wait(pid);
-        close(pipeThing[1]);
-        dup2(STDIN_FILENO, pipeThing[0]);
-
-    }
-    return 0;
-}
 
 void printError(){
     char error_message[30] = "An error has occurred\n";
