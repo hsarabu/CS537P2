@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX_LINE 128
 #define BIN_DIR "/bin"
@@ -12,9 +13,10 @@
 
 static int getLine(char *input, char **toks, char *tok);
 static void printError();
-static int execute(char **toks, int __numargs);
+static void insertProceess(int process);
+static void removeProcess(int process);
 
-
+int processes[20]; //keep track of 20 background processes
 
 int main() {
     int commandHistory = 0;
@@ -24,16 +26,20 @@ int main() {
         int inRedir = FALSE;
         int outRedir = FALSE;
         int needPipe = FALSE;
+        int background = FALSE;
         int pipeAccess[2];
         int fileDesc;
         char fileName[128];
         commandHistory++;
-        char *redirCommands[MAX_LINE];
+        char *redirCommands[MAX_LINE]; //using as redir and 1st part ofpip
+        char *pipe2[MAX_LINE]; //second part of the pipe
         int stdInput = dup(STDIN_FILENO);
         int stdOut = dup(STDOUT_FILENO);
 
-
+        //TODO: Fix the stdout flushing
         printf("mysh (%i)> ", commandHistory);
+        fflush(stdout);
+
         char *toks[MAX_LINE];
         char *tok;
         char buff[10000];
@@ -100,7 +106,7 @@ int main() {
             */
         else {
 
-            //look for < and > redirections
+            //look for < and > redirections and | piping
             int index = 0;
             while(toks[index] != NULL){
                 if(strcmp(toks[index], "<") == 0){
@@ -111,10 +117,24 @@ int main() {
                     outRedir = TRUE;
                     break;
                 }
+                if(strcmp(toks[index], "|") == 0){
+                    needPipe = TRUE;
+                    break;
+                }
                 index++;
             }
+            //look for background process &
+            int backgroundIndex = 0;
+            while(toks[backgroundIndex] != NULL){
+                if(strcmp(toks[index], "&") == 0){
+                    background = TRUE;
+                    toks[index] = NULL;
+                }
+                backgroundIndex++;
+            }
+
             //TODO: Add error handling when there are too many args
-            if(inRedir == TRUE || outRedir == TRUE){
+            if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE){
                 //have to send different things to the execvp command in the child
 
 
@@ -133,7 +153,7 @@ int main() {
                     close(1); //close stdout and reassing w/ dup2
                     dup2(fileDesc, 1);
                 }
-                else{
+                else if (inRedir == TRUE){
                     for(int i = index + 1; i < __numArgs; i++){
                         redirCommands[i - index - 1] = toks[i];
                     }
@@ -142,15 +162,24 @@ int main() {
                     close(0); //close the input
                     dup2(fileDesc, 0);
                 }
-            }
-            /*
+                else {
+                    //piping
+                    if (pipe(pipeAccess) == -1) {
+                        printError();
+                        continue;
+                    }
+                    for(int i = 0; i < __numArgs; i++){
+                        if(i < index){
+                            redirCommands[i] = toks[i];
+                        }
+                        else if(i > index){
+                            pipe2[i] = toks[i];
+                        }
+                    }
 
-            needPipe = TRUE;
-            if (pipe(pipeAccess) == -1) {
-                printError();
-                continue;
+                }
             }
-             */
+
 
             //if there is a pipe, nothing is displayed in the console
             int pid = fork();
@@ -160,10 +189,11 @@ int main() {
                     dup2(pipeAccess[1], 1); //stdout -> pipe
                     dup2(pipeAccess[1], 2); //stderr -> pipe
 
-                    close(pipeAccess[1]);
                 }
-
-                if(inRedir == TRUE || outRedir == TRUE) execvp(redirCommands[0], redirCommands);
+                //TODO: Should probably exit if the execvp command returns false or something
+                if(inRedir == TRUE || outRedir == TRUE) {
+                    execvp(redirCommands[0], redirCommands);
+                }
                 execvp(toks[0], toks);
 
             } else if (pid < 0) {
@@ -174,23 +204,37 @@ int main() {
                 if(needPipe == FALSE){
                     wait(pid);
                 }
-                else if (needPipe == TRUE) {
-                    char outBuff[1000];
+                else if (background == FALSE) {
+                    wait(NULL);
+                    insertProceess(pid);
+                }
+                else {
                     close(pipeAccess[1]); //close write end in parent
-                    while (read(pipeAccess[0], outBuff, sizeof(outBuff)) != 0) {
-                        write(STDIN_FILENO, outBuff, sizeof(outBuff));
+
+                    //need to fork again
+                    int child = fork();
+                    if(child == 0) {
+                        //in the child process
+                        dup2(pipeAccess[0], 0); //pipe other stdout to stdin of child
+                        close(pipeAccess[0]);
+                        execvp(pipe2[0], pipe2);
+                    }
+                    else{
+                        wait(child);
+                        kill(pid, SIGINT); //kill parent process. Ignore output, this means the that child is finished
                     }
                 }
             }
 
         }
         //TODO: Remove the break so it actually works
-        //TODO: Solve issue where if you do commands really fast, "An error has occured" appears next to mysh
         close(0);
         close(1);
+        close(pipeAccess[0]);
+        close(pipeAccess[1]);
+        fflush(stdout);
         dup2(stdInput, 0);
         dup2(stdOut, 1);
-        fflush(stdout);
     }
 
 
@@ -214,4 +258,17 @@ int getLine(char *input, char **toks, char *tok){
 void printError(){
     char error_message[30] = "An error has occurred\n";
     write(STDERR_FILENO, error_message, strlen(error_message));
+}
+
+
+void insertProcess(int process) {
+    //importing in array of max [2] of ints. 0 is the parent, 1 is child if there are any
+    //we need to keep track of the children for each parent in case a child process dies with piping
+    for(int i = 0; i < 20; i++){
+        //check if the process at i is complete first
+        waitpid(processes[i], )
+        if(processes[i] == NULL){
+            processes[i] = process;
+        }
+    }
 }
