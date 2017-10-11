@@ -47,6 +47,7 @@ int main() {
         }
         if(strcmp(buff, "\n") == 0){
             printError();
+            commandHistory--;
             continue;
         }
         if(strlen(buff) > MAX_LINE){
@@ -58,6 +59,7 @@ int main() {
         __numArgs = getLine(buff, toks, tok);
         if(__numArgs == 0){
             printError();
+            commandHistory--;
             continue;
         }
         //doing built ins
