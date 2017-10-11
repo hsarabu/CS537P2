@@ -35,15 +35,18 @@ int main() {
         fflush(stdout);
 
         printf("mysh (%i)> ", commandHistory);
-
         char *toks[MAX_LINE];
         char *tok;
         char buff[10000];
-        if(fgets(buff, MAX_LINE, stdin) == NULL){
+        if(fgets(buff, 10000, stdin) == NULL){
             printError();
             continue;
         }
         if(strcmp(buff, "\n") == 0){
+            printError();
+            continue;
+        }
+        if(strlen(buff) > MAX_LINE){
             printError();
             continue;
         }
@@ -105,20 +108,21 @@ int main() {
 
             //look for < and > redirections and | piping
             int index = 0;
+            int needContinue = FALSE;
             while(toks[index] != NULL){
                 if(strcmp(toks[index], "<") == 0){
                     inRedir = TRUE;
-                    if(toks[index+2] == NULL){
+                    if(toks[index+2] != NULL){
                         printError();
-                        continue;
+                        needContinue = TRUE;
                     }
                     break;
                 }
                 if(strcmp(toks[index], ">") == 0){
                     outRedir = TRUE;
-                    if(toks[index+2] == NULL){
+                    if(toks[index+2] != NULL){
                         printError();
-                        continue;
+                        needContinue = TRUE;
                     }
                     break;
                 }
@@ -128,6 +132,7 @@ int main() {
                 }
                 index++;
             }
+            if(needContinue == TRUE) continue;
             //look for background process &
             int backgroundIndex = 0;
             while(toks[backgroundIndex] != NULL){
@@ -194,15 +199,17 @@ int main() {
                     dup2(pipeAccess[1], 2); //stderr -> pipe
 
                 }
-                if(inRedir == TRUE || outRedir == TRUE) {
+                if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE) {
                     if(execvp(redirCommands[0], redirCommands) == -1){
                         printError();
                         exit(0);
                     }
                 }
-                if(execvp(toks[0], toks) == -1){
-                    printError();
-                    exit(0);
+                else {
+                    if (execvp(toks[0], toks) == -1) {
+                        printError();
+                        exit(0);
+                    }
                 }
 
             } else if (pid < 0) {
@@ -228,7 +235,10 @@ int main() {
                         //in the child process
                         dup2(pipeAccess[0], 0); //pipe other stdout to stdin of child
                         close(pipeAccess[0]);
-                        execvp(pipe2[0], pipe2);
+                        if(execvp(pipe2[0], pipe2) == -1){
+                            printError();
+                            exit(0);
+                        }
                     }
                     else{
                         int status2;
@@ -269,6 +279,7 @@ int getLine(char *input, char **toks, char *tok){
 void printError(){
     char error_message[30] = "An error has occurred\n";
     write(STDERR_FILENO, error_message, strlen(error_message));
+    fflush(stdin);
 }
 
 
