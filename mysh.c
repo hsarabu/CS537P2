@@ -205,6 +205,7 @@ int main() {
             int pid = fork();
             if (pid == 0) {
                 if(needPipe == TRUE){
+                    close(STDIN_FILENO);
                     close(pipeAccess[0]);
                     dup2(pipeAccess[1], 1); //stdout -> pipe
                     dup2(pipeAccess[1], 2); //stderr -> pipe
@@ -213,13 +214,13 @@ int main() {
                 if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE) {
                     if(execvp(redirCommands[0], redirCommands) == -1){
                         printError();
-                        exit(0);
+                        exit(1);
                     }
                 }
                 else {
                     if (execvp(toks[0], toks) == -1) {
                         printError();
-                        exit(0);
+                        exit(1);
                     }
                 }
 
@@ -238,23 +239,31 @@ int main() {
                     }
                 }
                 else {
+
                     close(pipeAccess[1]); //close write end in parent
 
                     //need to fork again
                     int child = fork();
                     if(child == 0) {
+                        close(STDIN_FILENO);
+                        close(pipeAccess[1]);
                         //in the child process
-                        dup2(pipeAccess[0], 0); //pipe other stdout to stdin of child
-                        close(pipeAccess[0]);
+                        dup2(pipeAccess[0], STDIN_FILENO); //pipe other stdout to stdin of child
                         if(execvp(pipe2[0], pipe2) == -1){
                             printError();
                             exit(0);
                         }
                     }
+                    else if (child < 0){
+                        printError();
+                        continue;
+                    }
                     else{
                         int status2;
                         waitpid(child, &status2, 0);
                         kill(pid, SIGINT); //kill parent process. Ignore output, this means the that child is finished
+                        dup2(STDIN_FILENO, pipeAccess[0]);
+                        dup2(STDOUT_FILENO, pipeAccess[1]);
                     }
                 }
             }
