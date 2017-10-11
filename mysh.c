@@ -115,6 +115,16 @@ int main() {
             */
         else {
 
+            //look for background process &
+            int backgroundIndex = 0;
+            while(toks[backgroundIndex] != NULL){
+                if(strcmp(toks[backgroundIndex], "&") == 0){
+                    background = TRUE;
+                    toks[backgroundIndex] = NULL;
+                }
+                backgroundIndex++;
+            }
+
             //look for < and > redirections and | piping
             int index = 0;
             int needContinue = FALSE;
@@ -146,15 +156,6 @@ int main() {
                 index++;
             }
             if(needContinue == TRUE) continue;
-            //look for background process &
-            int backgroundIndex = 0;
-            while(toks[backgroundIndex] != NULL){
-                if(strcmp(toks[backgroundIndex], "&") == 0){
-                    background = TRUE;
-                    toks[backgroundIndex] = NULL;
-                }
-                backgroundIndex++;
-            }
 
             if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE){
                 //have to send different things to the execvp command in the child
@@ -165,7 +166,7 @@ int main() {
                     //file name will be at index++
                     strcpy(fileName, toks[index + 1]);
                     if(outRedir == TRUE){
-                        fileDesc = open(fileName, O_WRONLY | O_CREAT | O_TRUNC);
+                        fileDesc = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
                         if(fileDesc < 0){
                             printError();
                             continue;
