@@ -28,7 +28,7 @@ int main() {
         int needPipe = FALSE;
         int background = FALSE;
         int pipeAccess[2];
-        int fileDesc;
+        int inFile, outFile;
         char fileName[128];
         commandHistory++;
         char *redirCommands[MAX_LINE]; //using as redir and 1st part ofpip
@@ -127,23 +127,25 @@ int main() {
 
             //look for < and > redirections and | piping
             int index = 0;
+            int inIndex = 0;
+            int outIndex = 0;
             int needContinue = FALSE;
             while(toks[index] != NULL){
                 if(strcmp(toks[index], "<") == 0){
                     inRedir = TRUE;
-                    if(toks[index+2] != NULL){
+                    if(toks[index+2] != NULL && strcmp(toks[index+2], ">") != 0){
                         printError();
                         needContinue = TRUE;
                     }
-                    break;
+                    inIndex = index;
                 }
                 if(strcmp(toks[index], ">") == 0){
                     outRedir = TRUE;
-                    if(toks[index+2] != NULL){
+                    if(toks[index+2] != NULL && strcmp(toks[index+2], "<") != 0){
                         printError();
                         needContinue = TRUE;
                     }
-                    break;
+                    outIndex = index;
                 }
                 if(strcmp(toks[index], "|") == 0){
                     needPipe = TRUE;
@@ -157,51 +159,53 @@ int main() {
             }
             if(needContinue == TRUE) continue;
 
-            if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE){
-                //have to send different things to the execvp command in the child
-                if(outRedir == TRUE || inRedir == TRUE){
-                    for(int i = 0; i < index; i++){
+            //have to send different things to the execvp command in the child
+            if(outRedir == TRUE){
+                if(inRedir == FALSE) {
+                    for (int i = 0; i < outIndex; i++) {
                         redirCommands[i] = toks[i];
                     }
-                    //file name will be at index++
-                    strcpy(fileName, toks[index + 1]);
-                    if(outRedir == TRUE){
-                        fileDesc = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
-                        if(fileDesc < 0){
-                            printError();
-                            continue;
-                        }
-                        close(1); //close stdout and reassing w/ dup2
-                        dup2(fileDesc, 1);
-                    }
-                    else if (inRedir == TRUE){
-                        fileDesc = open(fileName, O_RDONLY);
-                        if(fileDesc < 0){
-                            printError();
-                            continue;
-                        }
-                        close(0); //close the input
-                        dup2(fileDesc, 0);
-                    }
                 }
-                else {
-                    //piping
-                    if (pipe(pipeAccess) == -1) {
+                //file name will be at index++
+                strcpy(fileName, toks[outIndex + 1]);
+                    inFile = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+                    if(inFile < 0){
                         printError();
                         continue;
                     }
-                    for(int i = 0; i < __numArgs; i++){
-                        if(i < index){
-                            redirCommands[i] = toks[i];
-                        }
-                        else if(i > index){
-                            pipe2[i] = toks[i];
-                        }
-                    }
-
-                }
+                    close(1); //close stdout and reassing w/ dup2
+                    dup2(inFile, 1);
             }
+            if(inRedir == TRUE){
+                for(int i = 0; i < inIndex; i++){
+                    redirCommands[i] = toks[i];
+                }
+                //file name will be at index++
+                strcpy(fileName, toks[inIndex + 1]);
+                outFile = open(fileName, O_RDONLY);
+                if(outFile < 0){
+                    printError();
+                    continue;
+                }
+                close(0); //close the input
+                dup2(outFile, 0);
+            }
+            if(needPipe == TRUE) {
+                //piping
+                if (pipe(pipeAccess) == -1) {
+                    printError();
+                    continue;
+                }
+                for(int i = 0; i < __numArgs; i++){
+                    if(i < index){
+                        redirCommands[i] = toks[i];
+                    }
+                    else if(i > index){
+                        pipe2[i] = toks[i];
+                    }
+                }
 
+            }
 
             //if there is a pipe, nothing is displayed in the console
             int pid = fork();
@@ -311,23 +315,6 @@ void insertProcess(int process) {
     processes[backgroundIndex] = process;
     if(backgroundIndex < 19) backgroundIndex++;
     else backgroundIndex = 0;
-    /*
-    for(int i = 0; i < 20; i++){
-        //check if the process at i is complete first
-        if(processes[i] != NULL){
-            int arrayStatus;
-            if(waitpid(processes[i], &arrayStatus, WNOHANG) != processes[i]){
-                //we can evict the existing processID and place the new one
-                processes[i] = process;
-                break;
-            }
-        }
-        if(processes[i] == NULL){
-            processes[i] = process;
-            break;
-        }
-    }
-     */
 }
 
 void exitProgram(){
