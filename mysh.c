@@ -6,16 +6,13 @@
 #include <signal.h>
 
 #define MAX_LINE 128
-#define BIN_DIR "/bin"
-
 #define TRUE 0
 #define FALSE 1
 
 static int getLine(char *input, char **toks, char *tok);
 static void printError();
-static void insertProceess(int process);
-static void removeProcess(int process);
-
+static void insertProcess(int process);
+static void exitProgram();
 int processes[20]; //keep track of 20 background processes
 
 int main() {
@@ -35,10 +32,9 @@ int main() {
         char *pipe2[MAX_LINE]; //second part of the pipe
         int stdInput = dup(STDIN_FILENO);
         int stdOut = dup(STDOUT_FILENO);
-
-        //TODO: Fix the stdout flushing
-        printf("mysh (%i)> ", commandHistory);
         fflush(stdout);
+
+        printf("mysh (%i)> ", commandHistory);
 
         char *toks[MAX_LINE];
         char *tok;
@@ -87,6 +83,7 @@ int main() {
                     printError();
                     continue;
                 }
+                free(home);
             }
             else{
                 if(toks[2] != NULL){
@@ -111,10 +108,18 @@ int main() {
             while(toks[index] != NULL){
                 if(strcmp(toks[index], "<") == 0){
                     inRedir = TRUE;
+                    if(toks[index+2] == NULL){
+                        printError();
+                        continue;
+                    }
                     break;
                 }
                 if(strcmp(toks[index], ">") == 0){
                     outRedir = TRUE;
+                    if(toks[index+2] == NULL){
+                        printError();
+                        continue;
+                    }
                     break;
                 }
                 if(strcmp(toks[index], "|") == 0){
@@ -126,14 +131,13 @@ int main() {
             //look for background process &
             int backgroundIndex = 0;
             while(toks[backgroundIndex] != NULL){
-                if(strcmp(toks[index], "&") == 0){
+                if(strcmp(toks[backgroundIndex], "&") == 0){
                     background = TRUE;
-                    toks[index] = NULL;
+                    toks[backgroundIndex] = NULL;
                 }
                 backgroundIndex++;
             }
 
-            //TODO: Add error handling when there are too many args
             if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE){
                 //have to send different things to the execvp command in the child
 
@@ -190,11 +194,16 @@ int main() {
                     dup2(pipeAccess[1], 2); //stderr -> pipe
 
                 }
-                //TODO: Should probably exit if the execvp command returns false or something
                 if(inRedir == TRUE || outRedir == TRUE) {
-                    execvp(redirCommands[0], redirCommands);
+                    if(execvp(redirCommands[0], redirCommands) == -1){
+                        printError();
+                        exit(0);
+                    }
                 }
-                execvp(toks[0], toks);
+                if(execvp(toks[0], toks) == -1){
+                    printError();
+                    exit(0);
+                }
 
             } else if (pid < 0) {
                 printError();
@@ -202,11 +211,13 @@ int main() {
             } else {
                 //parent
                 if(needPipe == FALSE){
-                    wait(pid);
+                    int status;
+                    if(waitpid(pid, &status, 0) != pid){
+                        printError();
+                    }
                 }
                 else if (background == FALSE) {
-                    wait(NULL);
-                    insertProceess(pid);
+                    insertProcess(pid);
                 }
                 else {
                     close(pipeAccess[1]); //close write end in parent
@@ -220,14 +231,15 @@ int main() {
                         execvp(pipe2[0], pipe2);
                     }
                     else{
-                        wait(child);
+                        int status2;
+                        waitpid(child, &status2, 0);
                         kill(pid, SIGINT); //kill parent process. Ignore output, this means the that child is finished
                     }
                 }
             }
 
         }
-        //TODO: Remove the break so it actually works
+        //all this closing is probably unnessiary but its thorough
         close(0);
         close(1);
         close(pipeAccess[0]);
@@ -237,8 +249,7 @@ int main() {
         dup2(stdOut, 1);
     }
 
-
-    //upon exit we need to kill background tasks
+    exitProgram();
     return 0;
 }
 
@@ -262,13 +273,25 @@ void printError(){
 
 
 void insertProcess(int process) {
-    //importing in array of max [2] of ints. 0 is the parent, 1 is child if there are any
-    //we need to keep track of the children for each parent in case a child process dies with piping
     for(int i = 0; i < 20; i++){
         //check if the process at i is complete first
-        waitpid(processes[i], )
+        if(processes[i] != NULL){
+            int arrayStatus;
+            if(waitpid(processes[i], &arrayStatus, WNOHANG) != processes[i]){
+                //we can evict the existing processID and place the new one
+                processes[i] = process;
+            }
+        }
         if(processes[i] == NULL){
             processes[i] = process;
+        }
+    }
+}
+
+void exitProgram(){
+    for(int i =0; i < 20; i++){
+        if(processes[i] != NULL){
+            kill(processes[i], SIGINT);
         }
     }
 }
