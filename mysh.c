@@ -136,6 +136,10 @@ int main() {
                 }
                 if(strcmp(toks[index], "|") == 0){
                     needPipe = TRUE;
+                    if(index == 0 || toks[index + 1] == NULL){
+                        printError();
+                        needContinue = TRUE;
+                    }
                     break;
                 }
                 index++;
@@ -170,6 +174,10 @@ int main() {
                     }
                     else if (inRedir == TRUE){
                         fileDesc = open(fileName, O_RDONLY);
+                        if(fileDesc < 0){
+                            printError();
+                            continue;
+                        }
                         close(0); //close the input
                         dup2(fileDesc, 0);
                     }
