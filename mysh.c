@@ -50,13 +50,16 @@ int main() {
             continue;
         }
         if(strlen(buff) > MAX_LINE){
-            write(STDERR_FILENO, error_message, strlen(error_message));
+            printError();
             continue;
         }
         //format the command
         int __numArgs = 0;
         __numArgs = getLine(buff, toks, tok);
-
+        if(__numArgs == 0){
+            printError();
+            continue;
+        }
         //doing built ins
         //breaking upon "exit"
         if(strcmp(toks[0], "exit") == 0){
@@ -148,31 +151,26 @@ int main() {
 
             if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE){
                 //have to send different things to the execvp command in the child
-
-
-                //if we are sending out, we have to find the 2 things before the >
-                if(outRedir == TRUE){
+                if(outRedir == TRUE || inRedir == TRUE){
                     for(int i = 0; i < index; i++){
                         redirCommands[i] = toks[i];
                     }
                     //file name will be at index++
                     strcpy(fileName, toks[index + 1]);
-                    fileDesc = open(fileName, O_WRONLY | O_CREAT | O_TRUNC);
-                    if(fileDesc < 0){
-                        printError();
-                        continue;
+                    if(outRedir == TRUE){
+                        fileDesc = open(fileName, O_WRONLY | O_CREAT | O_TRUNC);
+                        if(fileDesc < 0){
+                            printError();
+                            continue;
+                        }
+                        close(1); //close stdout and reassing w/ dup2
+                        dup2(fileDesc, 1);
                     }
-                    close(1); //close stdout and reassing w/ dup2
-                    dup2(fileDesc, 1);
-                }
-                else if (inRedir == TRUE){
-                    for(int i = index + 1; i < __numArgs; i++){
-                        redirCommands[i - index - 1] = toks[i];
+                    else if (inRedir == TRUE){
+                        fileDesc = open(fileName, O_RDONLY);
+                        close(0); //close the input
+                        dup2(fileDesc, 0);
                     }
-                    strcpy(fileName, toks[index - 1]);
-                    fileDesc = open(fileName, O_RDONLY);
-                    close(0); //close the input
-                    dup2(fileDesc, 0);
                 }
                 else {
                     //piping
@@ -280,9 +278,8 @@ int getLine(char *input, char **toks, char *tok){
 
 
 void printError(){
-
     write(STDERR_FILENO, error_message, strlen(error_message));
-    fflush(stdin);
+    fflush(stdout);
 }
 
 
@@ -304,7 +301,7 @@ void insertProcess(int process) {
 
 void exitProgram(){
     for(int i =0; i < 20; i++){
-        if(processes[i] != NULL){
+        if(processes[i] != NULL) {
             kill(processes[i], SIGINT);
         }
     }
