@@ -121,7 +121,7 @@ int main() {
                 if(strcmp(toks[index], "<") == 0){
                     inRedir = TRUE;
                     if(toks[index+2] != NULL){
-                        printError();
+                        //printError();
                         needContinue = TRUE;
                     }
                     break;
@@ -129,7 +129,7 @@ int main() {
                 if(strcmp(toks[index], ">") == 0){
                     outRedir = TRUE;
                     if(toks[index+2] != NULL){
-                        printError();
+                        //printError();
                         needContinue = TRUE;
                     }
                     break;
@@ -228,14 +228,14 @@ int main() {
                 continue;
             } else {
                 //parent
-                if(needPipe == FALSE){
+                if (background == TRUE) {
+                    insertProcess(pid);
+                }
+                else if(needPipe == FALSE){
                     int status;
                     if(waitpid(pid, &status, 0) != pid){
                         printError();
                     }
-                }
-                else if (background == FALSE) {
-                    insertProcess(pid);
                 }
                 else {
                     close(pipeAccess[1]); //close write end in parent
@@ -301,10 +301,12 @@ void insertProcess(int process) {
             if(waitpid(processes[i], &arrayStatus, WNOHANG) != processes[i]){
                 //we can evict the existing processID and place the new one
                 processes[i] = process;
+                break;
             }
         }
         if(processes[i] == NULL){
             processes[i] = process;
+            break;
         }
     }
 }
