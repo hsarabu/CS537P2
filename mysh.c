@@ -17,6 +17,7 @@ static void printPrompt(int counter);
 
 int processes[20]; //keep track of 20 background processes
 char error_message[30] = "An error has occurred\n";
+int backgroundIndex = 0;
 int main() {
     int commandHistory = 0;
 
@@ -262,6 +263,8 @@ int main() {
                         int status2;
                         waitpid(child, &status2, 0);
                         kill(pid, SIGINT); //kill parent process. Ignore output, this means the that child is finished
+                        close(pipeAccess[0]);
+                        close(pipeAccess[1]);
                         dup2(STDIN_FILENO, pipeAccess[0]);
                         dup2(STDOUT_FILENO, pipeAccess[1]);
                     }
@@ -303,6 +306,11 @@ void printError(){
 
 
 void insertProcess(int process) {
+    //shitty insert because the right way isn't fast enough
+    processes[backgroundIndex] = process;
+    if(backgroundIndex < 19) backgroundIndex++;
+    else backgroundIndex = 0;
+    /*
     for(int i = 0; i < 20; i++){
         //check if the process at i is complete first
         if(processes[i] != NULL){
@@ -318,6 +326,7 @@ void insertProcess(int process) {
             break;
         }
     }
+     */
 }
 
 void exitProgram(){
