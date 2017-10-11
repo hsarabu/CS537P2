@@ -46,7 +46,7 @@ int main() {
             continue;
         }
         if(strcmp(buff, "\n") == 0){
-            printError();
+            //printError();
             commandHistory--;
             continue;
         }
@@ -58,7 +58,7 @@ int main() {
         int __numArgs = 0;
         __numArgs = getLine(buff, toks, tok);
         if(__numArgs == 0){
-            printError();
+            //printError();
             commandHistory--;
             continue;
         }
