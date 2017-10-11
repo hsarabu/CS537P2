@@ -13,8 +13,10 @@ static int getLine(char *input, char **toks, char *tok);
 static void printError();
 static void insertProcess(int process);
 static void exitProgram();
-int processes[20]; //keep track of 20 background processes
+static void printPrompt(int counter);
 
+int processes[20]; //keep track of 20 background processes
+char error_message[30] = "An error has occurred\n";
 int main() {
     int commandHistory = 0;
 
@@ -34,7 +36,8 @@ int main() {
         int stdOut = dup(STDOUT_FILENO);
         fflush(stdout);
 
-        printf("mysh (%i)> ", commandHistory);
+        //printf("mysh (%i)> ", commandHistory);
+        printPrompt(commandHistory);
         char *toks[MAX_LINE];
         char *tok;
         char buff[10000];
@@ -47,7 +50,7 @@ int main() {
             continue;
         }
         if(strlen(buff) > MAX_LINE){
-            printError();
+            write(STDERR_FILENO, error_message, strlen(error_message));
             continue;
         }
         //format the command
@@ -277,7 +280,7 @@ int getLine(char *input, char **toks, char *tok){
 
 
 void printError(){
-    char error_message[30] = "An error has occurred\n";
+
     write(STDERR_FILENO, error_message, strlen(error_message));
     fflush(stdin);
 }
@@ -305,4 +308,17 @@ void exitProgram(){
             kill(processes[i], SIGINT);
         }
     }
+}
+
+void printPrompt(int counter){
+    char first[] = "mysh (";
+    char end[] = ")> ";
+    char intBuff[100];
+    snprintf(intBuff, sizeof(int), "%i", counter);
+    int outputLen = strlen(first) + strlen(end) + strlen(intBuff);
+    char output[outputLen];
+    strcpy(output, first);
+    strcat(output, intBuff);
+    strcat(output, end);
+    write(STDOUT_FILENO, output, outputLen);
 }
