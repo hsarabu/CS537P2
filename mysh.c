@@ -121,7 +121,7 @@ int main() {
                 if(strcmp(toks[index], "<") == 0){
                     inRedir = TRUE;
                     if(toks[index+2] != NULL){
-                        //printError();
+                        printError();
                         needContinue = TRUE;
                     }
                     break;
@@ -129,7 +129,7 @@ int main() {
                 if(strcmp(toks[index], ">") == 0){
                     outRedir = TRUE;
                     if(toks[index+2] != NULL){
-                        //printError();
+                        printError();
                         needContinue = TRUE;
                     }
                     break;
