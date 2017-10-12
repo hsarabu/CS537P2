@@ -108,11 +108,6 @@ int main() {
                 }
             }
         }
-            /*
-            else if(execute(toks, __numArgs) == 1){
-                continue;
-            }
-            */
         else {
 
             //look for background process &
@@ -177,8 +172,10 @@ int main() {
                     dup2(inFile, 1);
             }
             if(inRedir == TRUE){
-                for(int i = 0; i < inIndex; i++){
-                    redirCommands[i] = toks[i];
+                if(outRedir == FALSE) {
+                    for (int i = 0; i < inIndex; i++) {
+                        redirCommands[i] = toks[i];
+                    }
                 }
                 //file name will be at index++
                 strcpy(fileName, toks[inIndex + 1]);
@@ -189,6 +186,13 @@ int main() {
                 }
                 close(0); //close the input
                 dup2(outFile, 0);
+            }
+            if(inRedir == TRUE && outRedir == TRUE){
+                int firstRedir = inIndex;
+                if(outIndex < inIndex) firstRedir = outIndex;
+                for(int i = 0; i < firstRedir; i++){
+                    redirCommands[i] = toks[i];
+                }
             }
             if(needPipe == TRUE) {
                 //piping
@@ -214,7 +218,7 @@ int main() {
                     close(STDIN_FILENO);
                     close(pipeAccess[0]);
                     dup2(pipeAccess[1], 1); //stdout -> pipe
-                    dup2(pipeAccess[1], 2); //stderr -> pipe
+                    //dup2(pipeAccess[1], 2); //stderr -> pipe
 
                 }
                 if(inRedir == TRUE || outRedir == TRUE || needPipe == TRUE) {
@@ -273,6 +277,13 @@ int main() {
                         dup2(STDIN_FILENO, pipeAccess[0]);
                         dup2(STDOUT_FILENO, pipeAccess[1]);
                     }
+                }
+                if(needPipe == TRUE){
+                    close(pipeAccess[0]);
+                    close(pipeAccess[1]);
+                    dup2(STDIN_FILENO, pipeAccess[0]);
+                    dup2(STDOUT_FILENO, pipeAccess[1]);
+                    fflush(stdout);
                 }
             }
 
