@@ -18,8 +18,10 @@ static void printPrompt(int counter);
 int processes[20]; //keep track of 20 background processes
 char error_message[30] = "An error has occurred\n";
 int backgroundIndex = 0;
-int main() {
+int main(int argc, char*argv[]) {
     int commandHistory = 0;
+
+    if(argc > 1) return(1);
 
     while(1){
         //pseudobooleans for redirection
@@ -196,6 +198,7 @@ int main() {
             }
             if(needPipe == TRUE) {
                 //piping
+                int pipe2Counter = 0;
                 if (pipe(pipeAccess) == -1) {
                     printError();
                     continue;
@@ -205,7 +208,8 @@ int main() {
                         redirCommands[i] = toks[i];
                     }
                     else if(i > index){
-                        pipe2[i] = toks[i];
+                        pipe2[pipe2Counter] = toks[i];
+                        pipe2Counter++;
                     }
                 }
 
@@ -217,7 +221,7 @@ int main() {
                 if(needPipe == TRUE){
                     close(STDIN_FILENO);
                     close(pipeAccess[0]);
-                    dup2(pipeAccess[1], 1); //stdout -> pipe
+                    dup2(pipeAccess[1], STDOUT_FILENO); //stdout -> pipe
                     //dup2(pipeAccess[1], 2); //stderr -> pipe
 
                 }
@@ -272,8 +276,8 @@ int main() {
                         int status2;
                         waitpid(child, &status2, 0);
                         kill(pid, SIGINT); //kill parent process. Ignore output, this means the that child is finished
-                        close(pipeAccess[0]);
                         close(pipeAccess[1]);
+                        close(pipeAccess[0]);
                         dup2(STDIN_FILENO, pipeAccess[0]);
                         dup2(STDOUT_FILENO, pipeAccess[1]);
                     }
