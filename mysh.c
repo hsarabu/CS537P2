@@ -21,7 +21,10 @@ int backgroundIndex = 0;
 int main(int argc, char*argv[]) {
     int commandHistory = 0;
 
-    if(argc > 1) return(1);
+    if(argc > 1) {
+        printError();
+        return(1);
+    }
 
     while(1){
         //pseudobooleans for redirection
